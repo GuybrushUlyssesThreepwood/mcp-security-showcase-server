@@ -1,0 +1,26 @@
+{
+  "name": "mcp-showcase-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference production-grade MCP server: OAuth 2.1 resource server, strict tenant isolation, audit logging, rate limiting.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "issuer": "node scripts/dev-issuer.mjs",
+    "mint": "node scripts/dev-issuer.mjs mint"
+  },
+  "dependencies": {
+    "jose": "^5.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.dev-keys.json
+audit.log.jsonl
+*.log
+.DS_Store
