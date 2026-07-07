@@ -113,11 +113,17 @@ async function dispatch(rpc: any, ctx: AuthContext, deps: Deps, requestId: strin
 
 export function buildServer(deps: Deps) {
   const { cfg, audit, limiter, verify } = deps;
+  const httpsPublic = cfg.resourceUrl.startsWith("https:");
 
   return createServer(async (req, res) => {
     const requestId = randomUUID();
     const ip = req.socket.remoteAddress ?? undefined;
     const url = new URL(req.url ?? "/", cfg.resourceUrl);
+
+    // Baseline-Sicherheits-Header auf jeder Antwort (überleben writeHead via setHeader).
+    res.setHeader("x-content-type-options", "nosniff");
+    res.setHeader("referrer-policy", "no-referrer");
+    if (httpsPublic) res.setHeader("strict-transport-security", "max-age=15552000; includeSubDomains");
 
     // --- Discovery-Endpunkte (unauth, öffentlich) ---
     if (req.method === "GET" && url.pathname === "/.well-known/oauth-protected-resource") {
