@@ -14,7 +14,15 @@ export interface Note {
   createdBy: string;
 }
 
-export class TenantStore {
+/** Store-Vertrag: tenant ist IMMER erstes Argument → kein tenant-übergreifender Zugriff möglich.
+ *  In-Memory (unten) und Postgres-RLS (store-pg.ts) implementieren beide dieses Interface. */
+export interface Store {
+  listNotes(tenant: string): Promise<Note[]> | Note[];
+  getNote(tenant: string, id: string): Promise<Note | undefined> | Note | undefined;
+  createNote(tenant: string, subject: string, title: string, body: string): Promise<Note> | Note;
+}
+
+export class TenantStore implements Store {
   // Map<tenant, Map<noteId, Note>> — physische Trennung pro Tenant.
   private byTenant = new Map<string, Map<string, Note>>();
 

@@ -3,13 +3,13 @@
 
 import type { AuthContext } from "./auth.js";
 import { requireScope } from "./auth.js";
-import type { TenantStore } from "./store.js";
+import type { Store } from "./store.js";
 
 export interface ToolDef {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  handler(args: Record<string, unknown>, ctx: AuthContext, store: TenantStore): Promise<unknown>;
+  handler(args: Record<string, unknown>, ctx: AuthContext, store: Store): Promise<unknown>;
 }
 
 function str(args: Record<string, unknown>, key: string, required = true): string {
@@ -29,7 +29,7 @@ export const TOOLS: ToolDef[] = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     async handler(_args, ctx, store) {
       requireScope(ctx, "notes:read");
-      const notes = store.listNotes(ctx.tenant);
+      const notes = await store.listNotes(ctx.tenant);
       return { notes: notes.map(({ id, title, createdAt }) => ({ id, title, createdAt })) };
     },
   },
@@ -45,7 +45,7 @@ export const TOOLS: ToolDef[] = [
     async handler(args, ctx, store) {
       requireScope(ctx, "notes:read");
       const id = str(args, "id");
-      const note = store.getNote(ctx.tenant, id);
+      const note = await store.getNote(ctx.tenant, id);
       if (!note) {
         // Kein Unterschied zwischen "fremder Tenant" und "existiert nicht" → keine Cross-Tenant-Info.
         throw new ToolInputError("Note not found");
@@ -69,7 +69,7 @@ export const TOOLS: ToolDef[] = [
       requireScope(ctx, "notes:write");
       const title = str(args, "title");
       const body = str(args, "body");
-      const note = store.createNote(ctx.tenant, ctx.subject, title, body);
+      const note = await store.createNote(ctx.tenant, ctx.subject, title, body);
       return { id: note.id, createdAt: note.createdAt };
     },
   },

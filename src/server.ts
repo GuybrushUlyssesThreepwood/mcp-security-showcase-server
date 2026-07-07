@@ -6,7 +6,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { randomUUID } from "node:crypto";
 import type { Config } from "./config.js";
 import { AuthError, createVerifier, protectedResourceMetadata, type AuthContext } from "./auth.js";
-import { TenantStore } from "./store.js";
+import type { Store } from "./store.js";
 import { AuditLog } from "./audit.js";
 import { RateLimiter } from "./ratelimit.js";
 import { TOOLS, TOOL_MAP, ToolInputError } from "./tools.js";
@@ -15,7 +15,7 @@ const PROTOCOL_VERSION = "2025-06-18";
 
 interface Deps {
   cfg: Config;
-  store: TenantStore;
+  store: Store;
   audit: AuditLog;
   limiter: RateLimiter;
   verify: (h: string | undefined) => Promise<AuthContext>;

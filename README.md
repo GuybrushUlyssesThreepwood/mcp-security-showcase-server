@@ -90,11 +90,21 @@ observe a *per-tenant* limit (it's enforced after auth).
 Shipped for the 10 Aug launch: real tools + OAuth 2.1/PKCE validation + tenant isolation + audit log +
 rate limiting. Roadmap (public, doubles as content per T-203):
 
-- [ ] Swap in-memory store for Postgres with Row-Level-Security
-- [ ] Replace dev issuer with a real IdP integration (WorkOS/Auth0/Keycloak)
-- [ ] Token-exchange for downstream API calls (no passthrough)
-- [ ] Deploy guide (container + reverse proxy TLS)
+- [x] Swap in-memory store for Postgres with Row-Level-Security — `STORE=pg` + `src/store-pg.ts` + `migrations/001_notes_rls.sql`
+- [x] Token-exchange for downstream API calls (no passthrough) — `src/token-exchange.ts` (RFC 8693)
+- [x] Deploy guide (container + reverse proxy TLS) — `Dockerfile` + `docs/deploy.md`
+- [ ] Replace dev issuer with a real IdP integration (WorkOS/Auth0/Keycloak) — needs your IdP account
 - [ ] Becomes the seed of the licensed Starter-Kit (T-801/T-802)
+
+### Store backends
+```bash
+# default: in-memory (demo seeds)
+npm start
+# Postgres with RLS:
+psql "$ADMIN_URL" -f migrations/001_notes_rls.sql
+STORE=pg DATABASE_URL="postgres://mcp_app:...@host/db" npm install pg && npm start
+```
+See [docs/deploy.md](docs/deploy.md).
 
 ## ⚠️ Note
 

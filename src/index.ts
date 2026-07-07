@@ -2,19 +2,31 @@
 
 import { loadConfig } from "./config.js";
 import { createVerifier } from "./auth.js";
-import { TenantStore } from "./store.js";
+import { TenantStore, type Store } from "./store.js";
 import { AuditLog } from "./audit.js";
 import { RateLimiter } from "./ratelimit.js";
 import { buildServer } from "./server.js";
 
 const cfg = loadConfig();
-const store = new TenantStore();
 
-// Demo-Seeds: zwei Tenants mit je eigenen Notizen (belegt die Isolation).
-store.seed([
-  { tenant: "acme", title: "Acme roadmap", body: "Q3 launch", createdBy: "seed" },
-  { tenant: "globex", title: "Globex secret", body: "internal", createdBy: "seed" },
-]);
+async function makeStore(): Promise<Store> {
+  if (cfg.store === "pg") {
+    if (!cfg.databaseUrl) throw new Error("STORE=pg requires DATABASE_URL");
+    const { PgTenantStore } = await import("./store-pg.js");
+    console.log("store: postgres (RLS)");
+    return PgTenantStore.create(cfg.databaseUrl);
+  }
+  // In-Memory mit Demo-Seeds: zwei Tenants mit je eigenen Notizen (belegt die Isolation).
+  const store = new TenantStore();
+  store.seed([
+    { tenant: "acme", title: "Acme roadmap", body: "Q3 launch", createdBy: "seed" },
+    { tenant: "globex", title: "Globex secret", body: "internal", createdBy: "seed" },
+  ]);
+  console.log("store: in-memory (demo seeds)");
+  return store;
+}
+
+const store = await makeStore();
 
 const deps = {
   cfg,

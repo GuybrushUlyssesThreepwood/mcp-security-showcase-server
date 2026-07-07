@@ -18,6 +18,10 @@ export interface Config {
   rateLimitWindowMs: number;
   /** Pfad der Audit-Log-Datei (JSON Lines). */
   auditLogPath: string;
+  /** Store-Backend: "memory" (Default) oder "pg". */
+  store: "memory" | "pg";
+  /** Postgres-Verbindung (nur bei store=pg). */
+  databaseUrl?: string;
 }
 
 function req(name: string, fallback?: string): string {
@@ -41,5 +45,7 @@ export function loadConfig(): Config {
     rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 60),
     rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60000),
     auditLogPath: process.env.AUDIT_LOG_PATH ?? "audit.log.jsonl",
+    store: process.env.STORE === "pg" ? "pg" : "memory",
+    databaseUrl: process.env.DATABASE_URL,
   };
 }
