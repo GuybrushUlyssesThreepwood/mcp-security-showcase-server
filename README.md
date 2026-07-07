@@ -109,7 +109,7 @@ See [docs/deploy.md](docs/deploy.md).
 ## ⚠️ Note
 
 Uses a **dev-only** OAuth issuer stub for local testing. Do not use `scripts/dev-issuer.mjs` or
-`.dev-keys.json` in production. Replace `[Your Name]` in `LICENSE` before publishing (T-105).
+`.dev-keys.json` in production.
 
 ## License
 
