@@ -1,36 +1,37 @@
 # mcp-showcase-server
 
-**A reference MCP server that does the security layer right.**
+**Ein Referenz-MCP-Server, der die Security-Schicht richtig macht.**
 
-While [`mcp-sec-scan`](../mcp-sec-scan) shows *"I find the mistakes"*, this shows *"I build it correctly."*
-It's a production-shaped Model Context Protocol server (Streamable HTTP) with the four things SaaS teams
-actually need before letting AI agents into their product:
+Während [`mcp-sec-scan`](../mcp-sec-scan) zeigt *„Ich finde die Fehler"*, zeigt dieses Repo
+*„Ich baue es korrekt."* Es ist ein produktionsnaher Model-Context-Protocol-Server (Streamable HTTP)
+mit den vier Dingen, die SaaS-Teams wirklich brauchen, bevor sie KI-Agenten ins Produkt lassen:
 
-- 🔐 **OAuth 2.1 resource server** — validates bearer JWTs against the IdP's JWKS (signature, issuer, audience, expiry). PKCE/S256 advertised by the authorization server.
-- 🧱 **Strict tenant isolation** — the tenant is read **only** from the verified token, never from a request parameter. Every store operation is tenant-scoped. Cross-tenant access returns *"not found"* (no existence leak).
-- 📒 **Structured audit log** — append-only JSON Lines: who · tenant · tool · params (redacted) · outcome · time.
-- 🚦 **Per-tenant rate limiting** — fixed-window limiter, `429 + Retry-After`, protects against agent loops / cost blowups.
-- 🧯 Least-privilege **scopes** per tool, generic error responses (no stack-trace/secret leakage), restrictive CORS.
+- 🔐 **OAuth-2.1-Resource-Server** — validiert Bearer-JWTs gegen die JWKS des IdP (Signatur, Issuer, Audience, Ablauf). PKCE/S256 vom Authorization-Server angekündigt.
+- 🧱 **Strikte Mandantentrennung** — der Mandant wird **ausschließlich** aus dem verifizierten Token gelesen, nie aus einem Request-Parameter. Jede Store-Operation ist mandantengebunden. Fremdmandanten-Zugriff liefert *„not found"* (kein Existenz-Leak).
+- 📒 **Strukturiertes Audit-Log** — append-only JSON Lines: wer · Mandant · Tool · Params (redigiert) · Ergebnis · Zeit.
+- 🚦 **Rate-Limiting pro Mandant** — Fixed-Window-Limiter, `429 + Retry-After`, schützt vor Agenten-Loops / Kosten-Explosion.
+- 🧯 **Least-Privilege-Scopes** pro Tool, generische Fehlerantworten (kein Stacktrace-/Secret-Leak), restriktives CORS.
 
-> The HTTP/security layer is written explicitly (not hidden in a framework) on purpose — it *is* the product.
-> A real domain API and a real IdP slot in behind the same interfaces (see [`docs/api-auswahl.md`](docs/api-auswahl.md)).
+> Die HTTP-/Security-Schicht ist bewusst explizit geschrieben (nicht in einem Framework versteckt) —
+> sie *ist* das Produkt. Eine echte Domain-API und ein echter IdP lassen sich hinter denselben
+> Schnittstellen einsetzen (siehe [`docs/api-auswahl.md`](docs/api-auswahl.md)).
 
 ---
 
-## Run it locally (2 terminals)
+## Lokal starten (2 Terminals)
 
 ```bash
 npm install
 npm run build
 
-# terminal 1 — dev OAuth issuer (RS256 JWKS + AS metadata with PKCE S256)
+# Terminal 1 — Dev-OAuth-Issuer (RS256 JWKS + AS-Metadaten mit PKCE S256)
 npm run issuer
 
-# terminal 2 — the MCP server
+# Terminal 2 — der MCP-Server
 npm start
 ```
 
-Mint a token and call it:
+Token erzeugen und aufrufen:
 
 ```bash
 TOKEN=$(node scripts/dev-issuer.mjs mint acme notes:read,notes:write)
@@ -40,77 +41,95 @@ curl -s -X POST http://127.0.0.1:8970/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-Without a token you get `401` + a `WWW-Authenticate` header pointing at the resource metadata.
+Ohne Token gibt es `401` + einen `WWW-Authenticate`-Header, der auf die Resource-Metadaten zeigt.
 
-## Prove the isolation
+## Mandantentrennung beweisen
 
-A `globex` token cannot read an `acme` note — same id, different tenant → `Note not found`:
+Ein `globex`-Token kann keine `acme`-Notiz lesen — gleiche ID, anderer Mandant → `Note not found`:
 
 ```bash
 ACME=$(node scripts/dev-issuer.mjs mint acme notes:read,notes:write)
 GLOBEX=$(node scripts/dev-issuer.mjs mint globex notes:read,notes:write)
-# create as acme, then try to read as globex using the returned id → not found
+# als acme anlegen, dann als globex mit der zurückgegebenen ID lesen → not found
 ```
 
 ## Dogfooding
 
-Run our own scanner against it:
+Unseren eigenen Scanner dagegen laufen lassen:
 
 ```bash
 node ../mcp-sec-scan/dist/cli.js http://127.0.0.1:8970/mcp --token "$ACME" --active
 ```
 
-Result: auth enforced ✅, no unauth tools ✅, PKCE S256 ✅, no tool poisoning ✅, restrictive CORS ✅,
-no error leakage ✅. The only local finding is **TLS** (because localhost runs over HTTP) — in production
-behind HTTPS this passes. The rate-limit WARN is expected: an unauthenticated external scanner cannot
-observe a *per-tenant* limit (it's enforced after auth).
+Ergebnis: Auth erzwungen ✅, keine unauth. Tools ✅, PKCE S256 ✅, kein Tool-Poisoning ✅,
+restriktives CORS ✅, kein Fehler-Leak ✅. Das einzige lokale Finding ist **TLS** (weil localhost über
+HTTP läuft) — in Produktion hinter HTTPS besteht der Check. Die Rate-Limit-WARN ist erwartet: ein
+unauthentifizierter externer Scanner kann ein *mandantenbezogenes* Limit nicht beobachten (es greift
+erst nach der Auth).
+
+## Tests
+
+```bash
+npm test
+```
+
+26 Tests (`node:test`), die die Security-Zusagen beweisen — nicht nur, dass der Code kompiliert:
+
+- **Auth** (`test/auth.test.ts`) — echte RS256-JWT-Verifikation gegen einen lokalen JWKS-Server: gültiges Token liefert Mandant/Scopes; falsche **Audience**, falscher **Issuer**, **abgelaufenes** und **signatur-manipuliertes** Token werden alle abgelehnt; ein Token **ohne Mandanten-Claim** wird verweigert (der Mandant kommt nur aus dem Token).
+- **Mandantentrennung** (`test/store.test.ts`, `test/tools.test.ts`) — ein Mandant sieht nur seine eigenen Notizen; ein mandantenübergreifendes `get_note` mit echter ID liefert *„not found"* (kein Existenz-Leak).
+- **Least Privilege** (`test/tools.test.ts`) — jedes Tool erzwingt seinen Scope (`notes:read` / `notes:write`).
+- **Rate-Limiting** (`test/ratelimit.test.ts`) — erlaubt bis `max`, dann `429`; pro Mandant; Fenster wird zurückgesetzt.
+- **Audit-Log** (`test/audit.test.ts`) — append-only JSON Lines; Secret-haltige Keys redigiert; lange Params gekürzt.
+
+CI (`.github/workflows/ci.yml`) führt Typecheck + Tests + Build aus, startet dann den Server und prüft,
+dass ein unauthentifiziertes `tools/list` mit `401` abgelehnt wird.
 
 ## Tools
 
-| Tool | Scope | Description |
-|------|-------|-------------|
-| `list_notes` | `notes:read` | List the tenant's notes |
-| `get_note` | `notes:read` | Get one note (tenant-scoped) |
-| `create_note` | `notes:write` | Create a note for the tenant |
+| Tool | Scope | Beschreibung |
+|------|-------|--------------|
+| `list_notes` | `notes:read` | Notizen des Mandanten auflisten |
+| `get_note` | `notes:read` | Eine Notiz holen (mandantengebunden) |
+| `create_note` | `notes:write` | Notiz für den Mandanten anlegen |
 
-## Configuration (env)
+## Konfiguration (Env)
 
-| Var | Default | Meaning |
-|-----|---------|---------|
-| `PORT` | 8970 | Server port |
-| `RESOURCE_URL` | `http://127.0.0.1:8970` | Public base URL / token audience |
-| `OAUTH_ISSUER` | `http://127.0.0.1:8969` | IdP issuer |
-| `OAUTH_JWKS_URI` | issuer `/.well-known/jwks.json` | JWKS endpoint |
-| `TENANT_CLAIM` | `tenant` | Token claim carrying the tenant id |
-| `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` | 60 / 60000 | Per-tenant limit |
-| `AUDIT_LOG_PATH` | `audit.log.jsonl` | Audit log file |
+| Variable | Standard | Bedeutung |
+|----------|----------|-----------|
+| `PORT` | 8970 | Server-Port |
+| `RESOURCE_URL` | `http://127.0.0.1:8970` | Öffentliche Basis-URL / Token-Audience |
+| `OAUTH_ISSUER` | `http://127.0.0.1:8969` | IdP-Issuer |
+| `OAUTH_JWKS_URI` | Issuer `/.well-known/jwks.json` | JWKS-Endpoint |
+| `TENANT_CLAIM` | `tenant` | Token-Claim mit der Mandanten-ID |
+| `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` | 60 / 60000 | Limit pro Mandant |
+| `AUDIT_LOG_PATH` | `audit.log.jsonl` | Audit-Log-Datei |
 
-## Launch scope (T-103) & roadmap
+## Launch-Scope (T-103) & Roadmap
 
-Shipped for the 10 Aug launch: real tools + OAuth 2.1/PKCE validation + tenant isolation + audit log +
-rate limiting. Roadmap (public, doubles as content per T-203):
+Ausgeliefert für den Launch am 10. Aug: echte Tools + OAuth-2.1/PKCE-Validierung + Mandantentrennung +
+Audit-Log + Rate-Limiting. Roadmap (öffentlich, dient zugleich als Content laut T-203):
 
-- [x] Swap in-memory store for Postgres with Row-Level-Security — `STORE=pg` + `src/store-pg.ts` + `migrations/001_notes_rls.sql`
-- [x] Token-exchange for downstream API calls (no passthrough) — `src/token-exchange.ts` (RFC 8693)
-- [x] Deploy guide (container + reverse proxy TLS) — `Dockerfile` + `docs/deploy.md`
-- [ ] Replace dev issuer with a real IdP integration (WorkOS/Auth0/Keycloak) — needs your IdP account
-- [ ] Becomes the seed of the licensed Starter-Kit (T-801/T-802)
+- [x] In-Memory-Store durch Postgres mit Row-Level-Security ersetzt — `STORE=pg` + `src/store-pg.ts` + `migrations/001_notes_rls.sql`
+- [x] Token-Exchange für nachgelagerte API-Calls (kein Passthrough) — `src/token-exchange.ts` (RFC 8693)
+- [x] Deploy-Guide (Container + Reverse-Proxy-TLS) — `Dockerfile` + `docs/deploy.md`
+- [ ] Dev-Issuer durch echte IdP-Integration ersetzen (WorkOS/Auth0/Keycloak) — braucht deinen IdP-Account
+- [ ] Wird zum Keim des lizenzierten Starter-Kits (T-801/T-802)
 
-### Store backends
+### Store-Backends
 ```bash
-# default: in-memory (demo seeds)
+# Standard: In-Memory (Demo-Seeds)
 npm start
-# Postgres with RLS:
+# Postgres mit RLS:
 psql "$ADMIN_URL" -f migrations/001_notes_rls.sql
 STORE=pg DATABASE_URL="postgres://mcp_app:...@host/db" npm install pg && npm start
 ```
-See [docs/deploy.md](docs/deploy.md).
+Siehe [docs/deploy.md](docs/deploy.md).
 
-## ⚠️ Note
+## ⚠️ Hinweis
 
-Uses a **dev-only** OAuth issuer stub for local testing. Do not use `scripts/dev-issuer.mjs` or
-`.dev-keys.json` in production.
+Nutzt einen **nur für Dev** gedachten OAuth-Issuer-Stub für lokales Testen. `scripts/dev-issuer.mjs`
+und `.dev-keys.json` **nicht** in Produktion verwenden.
 
-## License
+## Lizenz
 
 Apache-2.0
