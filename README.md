@@ -18,6 +18,26 @@ mit den vier Dingen, die SaaS-Teams wirklich brauchen, bevor sie KI-Agenten ins 
 
 ---
 
+## Was ist das?
+
+**Warum es das gibt.** Der Scanner beweist „Ich finde die Fehler" — überzeugend wird das erst mit dem
+Gegenstück „Ich baue es korrekt". Dieser Server ist der lebende Beweis der Kompetenz: eine
+Referenz-Implementierung der Security-Schicht, die man zeigen, gegen den eigenen Scanner laufen lassen
+(Dogfooding) und als Ausgangspunkt für Kundenprojekte nehmen kann.
+
+**Was es kann.** Produktionsnaher MCP-Server (Streamable HTTP) mit OAuth-2.1-Resource-Server
+(JWT-Validierung gegen JWKS), strikter Mandantentrennung (Mandant nur aus dem Token, kein Existenz-Leak
+über Mandanten), append-only Audit-Log, Rate-Limiting pro Mandant, Least-Privilege-Scopes und
+generischen Fehlerantworten. Austauschbare Store-Backends (In-Memory / Postgres mit Row-Level-Security),
+Token-Exchange (RFC 8693), Docker + Deploy-Guide. 26 Tests, die die Security-Zusagen belegen.
+
+**Für wen.** SaaS-Teams und Agenturen, die einen Remote-MCP-Server sicher ausliefern müssen, bevor sie
+KI-Agenten ins Produkt lassen — als Vorlage, Vergleichsmaßstab oder Basis eines Audits.
+
+**Rolle im Geschäft / Erwartung.** Referenz-Artefakt (Ticket T-103), gebaut für den Launch (10.08.2026).
+Es ist zugleich Content-Quelle (öffentliche Roadmap = Artikel-Stoff) und Keim des später lizenzierten
+Starter-Kits (T-801/T-802). Verkauft wird nicht dieser Code, sondern die Kompetenz, die er beweist.
+
 ## Lokal starten (2 Terminals)
 
 ```bash
