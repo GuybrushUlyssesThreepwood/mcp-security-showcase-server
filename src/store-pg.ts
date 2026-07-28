@@ -9,6 +9,8 @@
 import { randomUUID } from "node:crypto";
 import type { Note, Store } from "./store.js";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface PgLike {
   connect(): Promise<PgClient>;
   end(): Promise<void>;
@@ -70,6 +72,11 @@ export class PgTenantStore implements Store {
   }
 
   async getNote(tenant: string, id: string): Promise<Note | undefined> {
+    // `id` is a uuid column, so a non-uuid string makes Postgres raise
+    // "invalid input syntax for type uuid" — that surfaced as a 500 Internal error
+    // instead of the intended "Note not found", and the error text distinguished a
+    // malformed id from a foreign one. Reject the shape before querying.
+    if (!UUID_RE.test(id)) return undefined;
     return this.withTenant(tenant, async (c) => {
       const { rows } = await c.query(
         "SELECT id, tenant, title, body, created_at, created_by FROM notes WHERE tenant = $1 AND id = $2",

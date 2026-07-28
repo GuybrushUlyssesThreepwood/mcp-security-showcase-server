@@ -41,18 +41,21 @@ function rpcResult(id: unknown, result: unknown) {
 
 async function readBody(req: IncomingMessage, limitBytes = 1_000_000): Promise<string> {
   return new Promise((resolve, reject) => {
-    let data = "";
+    // Buffers are collected and decoded once at the end: appending each chunk to a
+    // string decodes it in isolation, so any multi-byte UTF-8 character straddling a
+    // chunk boundary is replaced by U+FFFD (umlauts/emoji in note bodies get mangled).
+    const chunks: Buffer[] = [];
     let size = 0;
-    req.on("data", (c) => {
+    req.on("data", (c: Buffer) => {
       size += c.length;
       if (size > limitBytes) {
         reject(new Error("payload too large"));
         req.destroy();
         return;
       }
-      data += c;
+      chunks.push(c);
     });
-    req.on("end", () => resolve(data));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
 }

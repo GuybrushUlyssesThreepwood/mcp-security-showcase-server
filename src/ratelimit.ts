@@ -11,9 +11,18 @@ export class RateLimiter {
 
   constructor(private max: number, private windowMs: number) {}
 
+  /** Drop expired windows — the tenant claim is attacker-chosen, so the key space
+   *  is unbounded and stale entries would accumulate for the process lifetime. */
+  private sweep(now: number): void {
+    for (const [key, w] of this.windows) {
+      if (now >= w.resetAt) this.windows.delete(key);
+    }
+  }
+
   check(key: string, now = Date.now()): RateLimitResult {
     let w = this.windows.get(key);
     if (!w || now >= w.resetAt) {
+      this.sweep(now);
       w = { count: 0, resetAt: now + this.windowMs };
       this.windows.set(key, w);
     }
