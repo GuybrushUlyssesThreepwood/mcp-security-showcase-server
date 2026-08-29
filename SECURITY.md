@@ -6,6 +6,7 @@ locally, and adapted — not deployed as-is.
 ## Reporting a vulnerability
 If you find a security weakness in the reference implementation, report it **privately**:
 - Email: **kontakt@honrodt.de** (Geschäftsadresse; eine eigene Produkt-Domain folgt)
+- Provider identification (Impressum, § 5 DDG): https://honrodt.de/impressum
 - Or GitHub private vulnerability reporting (Security tab).
 
 Please do not open a public issue for security reports.

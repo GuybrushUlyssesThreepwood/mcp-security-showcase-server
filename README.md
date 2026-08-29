@@ -156,6 +156,11 @@ Siehe [docs/deploy.md](docs/deploy.md).
 Nutzt einen **nur für Dev** gedachten OAuth-Issuer-Stub für lokales Testen. `scripts/dev-issuer.mjs`
 und `.dev-keys.json` **nicht** in Produktion verwenden.
 
+## Anbieter
+
+Yimmie Honrodt, Einzelunternehmen, Köln — **Impressum und Anbieterkennzeichnung nach § 5 DDG:**
+https://honrodt.de/impressum · Kontakt: kontakt@honrodt.de
+
 ## Lizenz
 
 Apache-2.0
