@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.1] - 2026-08-29
+### Fixed
+- **The tampered-signature test was only testing anything three runs out of four.** It flipped the
+  last base64url character of the signature, but an RS256 signature is 256 bytes: its final base64
+  group encodes a single byte, and the low four bits of the last character are padding that is
+  discarded on decode. Whenever that character fell in A–P, the flip changed padding only, the
+  decoded signature was unchanged, jose accepted the token and the test failed with "Missing
+  expected rejection" — which is how CI caught it on Node 22 after passing locally on Node 24. In
+  the other runs it passed, but only because the tampering happened to survive the round trip. It
+  now decodes the signature, flips a bit in the first byte and re-encodes, and asserts that the
+  token actually changed before asserting that verification rejects it.
+
 ## [0.2.0] - 2026-08-29
 ### Added
 - **Origin validation against DNS rebinding.** The MCP Streamable HTTP spec requires it and this

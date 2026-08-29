@@ -126,8 +126,22 @@ test("a token without the tenant claim is rejected as no_tenant (tenant only fro
 test("a tampered signature is rejected", async () => {
   const verify = createVerifier(cfg());
   const token = await mint({ tenant: "acme" });
-  // Letztes Zeichen der Signatur kippen.
-  const tampered = token.slice(0, -1) + (token.endsWith("A") ? "B" : "A");
+
+  // Signatur dekodieren, ein Bit im ersten Byte kippen, neu kodieren.
+  //
+  // Nicht das letzte Zeichen kippen: eine RS256-Signatur ist 256 Byte, die letzte Base64-Gruppe
+  // kodiert ein einzelnes Byte, und die unteren 4 Bit des letzten Zeichens sind Padding, das beim
+  // Dekodieren verworfen wird. 'A'→'B' ändert nur dieses Padding — die dekodierte Signatur bleibt
+  // identisch, jose akzeptiert das Token, und der Test scheiterte mit "Missing expected rejection".
+  // Das traf jedes Mal zu, wenn das letzte Zeichen in A–P lag, also in rund einem Viertel der Läufe
+  // (der Schlüssel wird je Lauf neu erzeugt). In den übrigen Läufen bestand der Test — aber nur,
+  // weil die Manipulation zufällig durchschlug.
+  const [header, payload, signature] = token.split(".");
+  const raw = Buffer.from(signature, "base64url");
+  raw[0] ^= 0xff;
+  const tampered = `${header}.${payload}.${raw.toString("base64url")}`;
+
+  assert.notEqual(tampered, token, "die Manipulation muss das Token tatsächlich verändern");
   await assert.rejects(
     () => verify(`Bearer ${tampered}`),
     (e: unknown) => e instanceof AuthError && e.code === "invalid_token"

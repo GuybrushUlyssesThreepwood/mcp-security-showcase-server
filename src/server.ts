@@ -100,7 +100,7 @@ async function dispatch(rpc: any, ctx: AuthContext, deps: Deps, requestId: strin
     return rpcResult(id, {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: { tools: {} },
-      serverInfo: { name: "mcp-showcase-server", version: "0.2.0" },
+      serverInfo: { name: "mcp-showcase-server", version: "0.2.1" },
     });
   }
 
