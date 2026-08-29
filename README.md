@@ -2,15 +2,17 @@
 
 **Ein Referenz-MCP-Server, der die Security-Schicht richtig macht.**
 
-Während [`mcp-sec-scan`](../mcp-sec-scan) zeigt *„Ich finde die Fehler"*, zeigt dieses Repo
-*„Ich baue es korrekt."* Es ist ein produktionsnaher Model-Context-Protocol-Server (Streamable HTTP)
-mit den vier Dingen, die SaaS-Teams wirklich brauchen, bevor sie KI-Agenten ins Produkt lassen:
+Während [`mcp-sec-scan`](https://github.com/GuybrushUlyssesThreepwood/mcp-security-sec-scan) zeigt
+*„Ich finde die Fehler"*, zeigt dieses Repo *„Ich baue es korrekt."* Es ist ein produktionsnaher
+Model-Context-Protocol-Server (Streamable HTTP) mit den Dingen, die SaaS-Teams wirklich brauchen,
+bevor sie KI-Agenten ins Produkt lassen:
 
 - 🔐 **OAuth-2.1-Resource-Server** — validiert Bearer-JWTs gegen die JWKS des IdP (Signatur, Issuer, Audience, Ablauf). PKCE/S256 vom Authorization-Server angekündigt.
 - 🧱 **Strikte Mandantentrennung** — der Mandant wird **ausschließlich** aus dem verifizierten Token gelesen, nie aus einem Request-Parameter. Jede Store-Operation ist mandantengebunden. Fremdmandanten-Zugriff liefert *„not found"* (kein Existenz-Leak).
-- 📒 **Strukturiertes Audit-Log** — append-only JSON Lines: wer · Mandant · Tool · Params (redigiert) · Ergebnis · Zeit.
+- 🌐 **Origin-Validierung gegen DNS-Rebinding** — die MCP-Streamable-HTTP-Spec verlangt sie. Geprüft wird **vor** der Auth: ein gültiger Token macht einen fremden Origin nicht zulässig, denn hier geht es um die Herkunft der Anfrage, nicht um die Identität des Aufrufers. Allowlist über `ALLOWED_ORIGINS`; Clients ohne Origin-Header (CLI, Agent, Server-zu-Server) passieren.
+- 📒 **Strukturiertes Audit-Log** — append-only JSON Lines: wer · Mandant · Tool · Parameter**namen** · Ergebnis · Zeit. **Bewusst ohne Parameterwerte:** Notizinhalte gehören nicht ins Audit-Log, sonst wird das Log selbst zum Datenschutzproblem. Ist der Log-Pfad nicht beschreibbar, startet der Server nicht.
 - 🚦 **Rate-Limiting pro Mandant** — Fixed-Window-Limiter, `429 + Retry-After`, schützt vor Agenten-Loops / Kosten-Explosion.
-- 🧯 **Least-Privilege-Scopes** pro Tool, generische Fehlerantworten (kein Stacktrace-/Secret-Leak), restriktives CORS.
+- 🧯 **Least-Privilege-Scopes** pro Tool, generische Fehlerantworten (kein Stacktrace-/Secret-Leak), **keine CORS-Header** — der Zugriff ist rein tokenbasiert, ohne `Access-Control-Allow-Origin` blockiert der Browser jede Cross-Origin-Antwort.
 
 > Die HTTP-/Security-Schicht ist bewusst explizit geschrieben (nicht in einem Framework versteckt) —
 > sie *ist* das Produkt. Eine echte Domain-API und ein echter IdP lassen sich hinter denselben
@@ -27,16 +29,13 @@ Referenz-Implementierung der Security-Schicht, die man zeigen, gegen den eigenen
 
 **Was es kann.** Produktionsnaher MCP-Server (Streamable HTTP) mit OAuth-2.1-Resource-Server
 (JWT-Validierung gegen JWKS), strikter Mandantentrennung (Mandant nur aus dem Token, kein Existenz-Leak
-über Mandanten), append-only Audit-Log, Rate-Limiting pro Mandant, Least-Privilege-Scopes und
-generischen Fehlerantworten. Austauschbare Store-Backends (In-Memory / Postgres mit Row-Level-Security),
-Token-Exchange (RFC 8693), Docker + Deploy-Guide. 26 Tests, die die Security-Zusagen belegen.
+über Mandanten), Origin-Validierung, append-only Audit-Log, Rate-Limiting pro Mandant,
+Least-Privilege-Scopes und generischen Fehlerantworten. Austauschbare Store-Backends (In-Memory /
+Postgres mit Row-Level-Security), Token-Exchange (RFC 8693), Docker + Deploy-Guide. 31 Tests, die die
+Security-Zusagen belegen.
 
 **Für wen.** SaaS-Teams und Agenturen, die einen Remote-MCP-Server sicher ausliefern müssen, bevor sie
 KI-Agenten ins Produkt lassen — als Vorlage, Vergleichsmaßstab oder Basis eines Audits.
-
-**Rolle im Geschäft / Erwartung.** Referenz-Artefakt (Ticket T-103), gebaut für den Launch (10.08.2026).
-Es ist zugleich Content-Quelle (öffentliche Roadmap = Artikel-Stoff) und Keim des später lizenzierten
-Starter-Kits (T-801/T-802). Verkauft wird nicht dieser Code, sondern die Kompetenz, die er beweist.
 
 ## Lokal starten (2 Terminals)
 
@@ -82,10 +81,14 @@ node ../mcp-sec-scan/dist/cli.js http://127.0.0.1:8970/mcp --token "$ACME" --act
 ```
 
 Ergebnis: Auth erzwungen ✅, keine unauth. Tools ✅, PKCE S256 ✅, kein Tool-Poisoning ✅,
-restriktives CORS ✅, kein Fehler-Leak ✅. Das einzige lokale Finding ist **TLS** (weil localhost über
+kein offenes CORS ✅, kein Fehler-Leak ✅. Das einzige lokale Finding ist **TLS** (weil localhost über
 HTTP läuft) — in Produktion hinter HTTPS besteht der Check. Die Rate-Limit-WARN ist erwartet: ein
 unauthentifizierter externer Scanner kann ein *mandantenbezogenes* Limit nicht beobachten (es greift
 erst nach der Auth).
+
+Der Origin-Check meldet `INFO` statt `PASS`: der Scanner sieht von außen nur das 401 der Auth-Schicht
+und kann nicht unterscheiden, ob dahinter eine Origin-Prüfung liegt. Sie liegt dort — nachgewiesen in
+`test/server.test.ts`, nicht per Scanner-Ausgabe.
 
 ## Tests
 
@@ -93,13 +96,14 @@ erst nach der Auth).
 npm test
 ```
 
-26 Tests (`node:test`), die die Security-Zusagen beweisen — nicht nur, dass der Code kompiliert:
+31 Tests (`node:test`), die die Security-Zusagen beweisen — nicht nur, dass der Code kompiliert:
 
 - **Auth** (`test/auth.test.ts`) — echte RS256-JWT-Verifikation gegen einen lokalen JWKS-Server: gültiges Token liefert Mandant/Scopes; falsche **Audience**, falscher **Issuer**, **abgelaufenes** und **signatur-manipuliertes** Token werden alle abgelehnt; ein Token **ohne Mandanten-Claim** wird verweigert (der Mandant kommt nur aus dem Token).
 - **Mandantentrennung** (`test/store.test.ts`, `test/tools.test.ts`) — ein Mandant sieht nur seine eigenen Notizen; ein mandantenübergreifendes `get_note` mit echter ID liefert *„not found"* (kein Existenz-Leak).
 - **Least Privilege** (`test/tools.test.ts`) — jedes Tool erzwingt seinen Scope (`notes:read` / `notes:write`).
 - **Rate-Limiting** (`test/ratelimit.test.ts`) — erlaubt bis `max`, dann `429`; pro Mandant; Fenster wird zurückgesetzt.
 - **Audit-Log** (`test/audit.test.ts`) — append-only JSON Lines; Secret-haltige Keys redigiert; lange Params gekürzt.
+- **HTTP-Schicht** (`test/server.test.ts`) — ein fremder `Origin` wird mit `403` abgelehnt, und zwar **vor** der Auth: ein gültiger Token hilft ihm nicht durch. Ein allowlisteter Origin passiert, ein fehlender Origin ebenfalls. Ein zu großer Body liefert `413`, keinen vorgetäuschten Parse-Fehler.
 
 CI (`.github/workflows/ci.yml`) führt Typecheck + Tests + Build aus, startet dann den Server und prüft,
 dass ein unauthentifiziertes `tools/list` mit `401` abgelehnt wird.
@@ -121,19 +125,21 @@ dass ein unauthentifiziertes `tools/list` mit `401` abgelehnt wird.
 | `OAUTH_ISSUER` | `http://127.0.0.1:8969` | IdP-Issuer |
 | `OAUTH_JWKS_URI` | Issuer `/.well-known/jwks.json` | JWKS-Endpoint |
 | `TENANT_CLAIM` | `tenant` | Token-Claim mit der Mandanten-ID |
+| `ALLOWED_ORIGINS` | *(leer)* | Komma-Liste erlaubter `Origin`-Header. Leer = jeder gesetzte Origin wird mit `403` abgelehnt; Requests ohne Origin passieren |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` | 60 / 60000 | Limit pro Mandant |
-| `AUDIT_LOG_PATH` | `audit.log.jsonl` | Audit-Log-Datei |
+| `AUDIT_LOG_PATH` | `audit.log.jsonl` | Audit-Log-Datei. Nicht beschreibbar → der Server startet nicht |
 
-## Launch-Scope (T-103) & Roadmap
+> Mit `NODE_ENV=production` gelten für `RESOURCE_URL`, `OAUTH_ISSUER`, `OAUTH_JWKS_URI` und
+> `OAUTH_AUDIENCE` **keine Standardwerte**. Fehlt einer, bricht der Start ab, statt still gegen einen
+> localhost-Issuer zu laufen, den es in Produktion nicht gibt.
 
-Ausgeliefert für den Launch am 10. Aug: echte Tools + OAuth-2.1/PKCE-Validierung + Mandantentrennung +
-Audit-Log + Rate-Limiting. Roadmap (öffentlich, dient zugleich als Content laut T-203):
+## Roadmap
 
 - [x] In-Memory-Store durch Postgres mit Row-Level-Security ersetzt — `STORE=pg` + `src/store-pg.ts` + `migrations/001_notes_rls.sql`
 - [x] Token-Exchange für nachgelagerte API-Calls (kein Passthrough) — `src/token-exchange.ts` (RFC 8693)
 - [x] Deploy-Guide (Container + Reverse-Proxy-TLS) — `Dockerfile` + `docs/deploy.md`
-- [ ] Dev-Issuer durch echte IdP-Integration ersetzen (WorkOS/Auth0/Keycloak) — braucht deinen IdP-Account
-- [ ] Wird zum Keim des lizenzierten Starter-Kits (T-801/T-802)
+- [x] Origin-Validierung gegen DNS-Rebinding — `ALLOWED_ORIGINS`, geprüft vor der Auth
+- [ ] Dev-Issuer durch echte IdP-Integration ersetzen (WorkOS/Auth0/Keycloak)
 
 ### Store-Backends
 ```bash

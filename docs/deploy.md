@@ -6,7 +6,10 @@
 Copy `.env.example` → set real values. In production the OAuth issuer is your real IdP (WorkOS/Auth0/
 Keycloak), not the dev stub.
 
-Required: `RESOURCE_URL`, `OAUTH_ISSUER`, `OAUTH_JWKS_URI`, `OAUTH_AUDIENCE`.
+Required: `RESOURCE_URL`, `OAUTH_ISSUER`, `OAUTH_JWKS_URI`, `OAUTH_AUDIENCE`. With `NODE_ENV=production`
+these have no defaults — a missing one aborts the start instead of silently using a localhost value.
+Set `ALLOWED_ORIGINS` if browsers call the endpoint directly; otherwise leave it empty and every
+request carrying an `Origin` header is rejected with 403.
 
 ## 2. Container
 ```bash
@@ -45,10 +48,10 @@ The app additionally sets `app.current_tenant` per transaction and filters expli
 
 ## 5. Downstream calls — no token passthrough
 For calls to downstream APIs on behalf of the user, use **token exchange** (`src/token-exchange.ts`, RFC 8693)
-against an IdP that supports it — never forward the incoming user token. See the "confused deputy" article.
+against an IdP that supports it — never forward the incoming user token.
 
 ## 6. Operational
-- Ship the audit log (`AUDIT_LOG_PATH`) to your log store; it's append-only JSON Lines with secrets redacted.
+- Ship the audit log (`AUDIT_LOG_PATH`) to your log store; it is append-only JSON Lines and records parameter NAMES only, never their values. The server refuses to start if the path is not writable.
 - Tune `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` per tenant SLA.
 - Run `mcp-sec-scan https://mcp.example.com/mcp --token <test-token> --active` after each deploy (or wire the
   GitHub Action) — behind TLS the scan should be clean.
