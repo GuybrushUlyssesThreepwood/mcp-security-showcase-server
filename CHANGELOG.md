@@ -11,6 +11,11 @@
 - Protected-resource metadata endpoint (RFC 9728 style) + `WWW-Authenticate` on 401.
 - Dev-only OAuth issuer stub (RS256 JWKS + AS metadata with PKCE S256) for local testing.
 - Passes `mcp-sec-scan` (auth, PKCE, unauth-tools, poisoning, CORS, error verbosity).
+- **Test suite (26 tests, `node:test`)** proving the security properties: real RS256 JWT verification
+  (audience/issuer/expiry/tamper/tenant-claim), tenant isolation at store + tool layers (no cross-tenant
+  read, no existence leak), per-tool scope enforcement, per-tenant rate limiting, and audit-log redaction.
+- **CI workflow** (`.github/workflows/ci.yml`): typecheck + tests + build, then dogfoods `mcp-sec-scan`
+  against the running server and fails if tools become reachable without a token.
 
 ### Roadmap
 - Postgres store with Row-Level-Security (adapter + migration).

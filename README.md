@@ -153,3 +153,19 @@ und `.dev-keys.json` **nicht** in Produktion verwenden.
 ## Lizenz
 
 Apache-2.0
+
+---
+
+## Haftung und Gewährleistung
+
+Dieses Projekt steht unter der **Apache-Lizenz 2.0** und wird ohne Mängelgewähr bereitgestellt
+(„AS IS", ohne Gewährleistungen oder Bedingungen gleich welcher Art). Eine Haftung für Schäden aus
+der Nutzung ist im gesetzlich zulässigen Rahmen ausgeschlossen — Einzelheiten in `LICENSE`,
+Abschnitte 7 und 8.
+
+**Ein Scan ersetzt keine vollständige Sicherheitsprüfung.** Er deckt die implementierten Prüfungen
+ab, nicht mehr. Ein Lauf ohne Befund bedeutet nicht, dass ein Server sicher ist. Die Verantwortung
+für Betrieb und Absicherung der geprüften Systeme bleibt beim Betreiber.
+
+**Fremde Systeme nur mit dokumentierter Erlaubnis des Betreibers prüfen.** Ohne Berechtigung kann
+schon ein Scan rechtswidrig sein.
