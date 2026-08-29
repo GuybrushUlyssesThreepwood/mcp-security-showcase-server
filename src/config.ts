@@ -22,14 +22,27 @@ export interface Config {
   store: "memory" | "pg";
   /** Postgres-Verbindung (nur bei store=pg). */
   databaseUrl?: string;
+  /** Erlaubte Origin-Header. Leer = jeder Origin wird abgelehnt (nur origin-lose Clients). */
+  allowedOrigins: string[];
 }
 
-function req(name: string, fallback?: string): string {
-  const v = process.env[name] ?? fallback;
-  if (v === undefined) {
-    throw new Error(`Missing required env var: ${name}`);
+/**
+ * Pflichtwert aus der Umgebung.
+ *
+ * Die Fallbacks sind reine Entwicklungswerte (localhost-Issuer, localhost-Audience). In Produktion
+ * sind sie gefährlich: fehlt OAUTH_ISSUER, liefe der Server still gegen einen IdP, den es dort nicht
+ * gibt, statt beim Start zu scheitern. Deshalb greifen Fallbacks nur außerhalb von NODE_ENV=production.
+ */
+function req(name: string, devFallback?: string): string {
+  const v = process.env[name];
+  if (v !== undefined && v !== "") return v;
+  if (process.env.NODE_ENV === "production" || devFallback === undefined) {
+    throw new Error(
+      `Missing required env var: ${name}` +
+        (devFallback !== undefined ? " (a development default exists, but it is not used in production)" : "")
+    );
   }
-  return v;
+  return devFallback;
 }
 
 export function loadConfig(): Config {
@@ -47,5 +60,9 @@ export function loadConfig(): Config {
     auditLogPath: process.env.AUDIT_LOG_PATH ?? "audit.log.jsonl",
     store: process.env.STORE === "pg" ? "pg" : "memory",
     databaseUrl: process.env.DATABASE_URL,
+    allowedOrigins: (process.env.ALLOWED_ORIGINS ?? "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
   };
 }

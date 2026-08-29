@@ -28,6 +28,7 @@ function cfg(): Config {
     rateLimitWindowMs: 60_000,
     auditLogPath: "audit.log.jsonl",
     store: "memory",
+    allowedOrigins: [],
   };
 }
 

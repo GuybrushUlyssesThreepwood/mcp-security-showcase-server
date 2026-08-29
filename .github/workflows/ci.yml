@@ -12,18 +12,29 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - name: Integration smoke — unauthenticated request is refused (401)
+      - name: Integration smoke — unauthenticated request refused, foreign Origin refused
         run: |
           # Self-contained: the server boots without the dev issuer because JWKS is only
-          # fetched when a token is actually verified. An unauthenticated call must be rejected.
+          # fetched when a token is actually verified.
           node dist/index.js &
           SRV=$!
           sleep 1
+          fail() { echo "$1"; kill $SRV 2>/dev/null || true; exit 1; }
+
+          # 1. An unauthenticated call must be rejected.
           CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8970/mcp \
             -H 'content-type: application/json' \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}')
+          [ "$CODE" = "401" ] || fail "Expected 401 for an unauthenticated tools/list, got $CODE"
+
+          # 2. A foreign Origin must be rejected before auth — 403, not 401. If this ever returns
+          #    401, the Origin check has moved behind the auth layer and no longer protects
+          #    authenticated browser sessions against DNS rebinding.
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8970/mcp \
+            -H 'content-type: application/json' \
+            -H 'origin: https://dns-rebind.attacker.example' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}')
+          [ "$CODE" = "403" ] || fail "Expected 403 for a foreign Origin, got $CODE"
+
           kill $SRV 2>/dev/null || true
-          if [ "$CODE" != "401" ]; then
-            echo "Expected 401 for an unauthenticated tools/list, got $CODE"; exit 1
-          fi
-          echo "Unauthenticated request correctly refused with 401."
+          echo "Unauthenticated request refused with 401; foreign Origin refused with 403."

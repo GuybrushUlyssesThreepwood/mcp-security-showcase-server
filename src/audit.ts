@@ -1,6 +1,14 @@
 // Strukturiertes, append-only Audit-Log (JSON Lines).
-// Protokolliert: wer (subject) · welcher Tenant · welches Tool · Parameter (redigiert) · Ergebnis · Zeit.
-// Secrets/PII werden vor dem Schreiben redigiert.
+// Protokolliert: wer (subject) · welcher Tenant · welches Tool · welche Parameter-NAMEN · Ergebnis · Zeit.
+//
+// Bewusst ohne Parameterwerte: Notizinhalte, Titel und alles andere, was ein Tool entgegennimmt,
+// gehören nicht ins Audit-Log. Ein Audit beantwortet „wer hat wann was getan", nicht „was stand
+// drin" — und ein Log, das Nutzerinhalte mitschreibt, wird selbst zum Datenschutzproblem und
+// vererbt seine Aufbewahrungsfrist an fremde Inhalte.
+//
+// `redact` bleibt als zweite Verteidigungslinie: sie maskiert Werte anhand des Schlüsselnamens und
+// kürzt lange Strings, falls ein Aufrufer doch einmal ein Objekt statt einer Namensliste übergibt.
+// Sie erkennt KEINE Secrets am Wert — ein Token unter dem Schlüssel `note` bliebe stehen.
 
 import { appendFile } from "node:fs/promises";
 
@@ -35,6 +43,24 @@ function redact(value: unknown, depth = 0): unknown {
 
 export class AuditLog {
   constructor(private path: string) {}
+
+  /**
+   * Einmal beim Start prüfen, ob überhaupt geschrieben werden kann.
+   *
+   * `write` fängt Fehler bewusst ab, damit ein volles Dateisystem keine Requests killt. Der Preis:
+   * ein dauerhaft nicht schreibbarer Pfad (falsche Rechte im Container) fällt sonst nie auf — der
+   * Server läuft, nur ohne Audit-Trail. Genau das ist der Zustand, den es nicht geben darf.
+   */
+  async assertWritable(): Promise<void> {
+    try {
+      await appendFile(this.path, "", "utf8");
+    } catch (err) {
+      throw new Error(
+        `Audit log is not writable at '${this.path}': ${err instanceof Error ? err.message : err}. ` +
+          `Refusing to start — a server without an audit trail is not the server this repo demonstrates.`
+      );
+    }
+  }
 
   async write(entry: Omit<AuditEntry, "ts">): Promise<void> {
     const line: AuditEntry = {

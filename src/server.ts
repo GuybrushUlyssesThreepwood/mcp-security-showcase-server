@@ -1,6 +1,6 @@
 // HTTP-Layer: MCP-über-Streamable-HTTP als OAuth-2.1-Resource-Server.
 // Bewusst explizit (kein Framework), damit die Security-Schichten sichtbar sind — der Verkaufspunkt.
-// Reihenfolge pro Request: TLS-Hinweis · Auth · Rate-Limit · Dispatch · Audit.
+// Reihenfolge pro Request: Sicherheits-Header · Origin · Auth · Rate-Limit · Dispatch · Audit.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -25,11 +25,29 @@ function json(res: ServerResponse, status: number, body: unknown, headers: Recor
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json",
-    // Restriktives CORS: keine Wildcard mit Credentials. Tokenbasiert, kein Origin-Reflect.
+    // Bewusst KEINE CORS-Header: der Zugriff ist rein tokenbasiert und für Browser-Cross-Origin
+    // nicht vorgesehen. Ohne Access-Control-Allow-Origin blockiert der Browser die Antwort —
+    // das ist die restriktivste mögliche Einstellung, kein vergessener Header.
     "cache-control": "no-store",
     ...headers,
   });
   res.end(payload);
+}
+
+/**
+ * Origin-Prüfung gegen DNS-Rebinding (MCP Streamable HTTP: Server MÜSSEN den Origin validieren).
+ *
+ * Ohne sie kann eine beliebige Webseite den lokal oder im internen Netz erreichbaren Server per
+ * DNS-Rebinding ansprechen. Der Bearer-Token schützt davor nicht vollständig: geprüft wird hier die
+ * Herkunft der Anfrage, nicht die Identität des Aufrufers.
+ *
+ * Nicht-Browser-Clients (CLI, Agent, Server-zu-Server) senden gar keinen Origin — die werden
+ * durchgelassen, denn ein fehlender Origin ist kein Cross-Site-Kontext. Gesetzte Origins müssen in
+ * ALLOWED_ORIGINS stehen; ist die Liste leer, wird jeder gesetzte Origin abgelehnt.
+ */
+function originAllowed(origin: string | undefined, allowed: string[]): boolean {
+  if (origin === undefined) return true;
+  return allowed.includes(origin);
 }
 
 function rpcError(id: unknown, code: number, message: string) {
@@ -46,17 +64,30 @@ async function readBody(req: IncomingMessage, limitBytes = 1_000_000): Promise<s
     // chunk boundary is replaced by U+FFFD (umlauts/emoji in note bodies get mangled).
     const chunks: Buffer[] = [];
     let size = 0;
+    let tooLarge = false;
     req.on("data", (c: Buffer) => {
       size += c.length;
+      if (tooLarge) return; // weiterlesen, aber nicht mehr puffern
       if (size > limitBytes) {
-        reject(new Error("payload too large"));
-        req.destroy();
+        // Begrenzt wird der SPEICHER, nicht die Verbindung. Ein req.destroy() hier reißt den Socket
+        // ab, während der Client noch sendet — er sieht dann ECONNRESET statt der 413-Antwort und
+        // erfährt nie, warum. Also: aufhören zu puffern, den Rest verwerfen, sauber antworten.
+        tooLarge = true;
+        chunks.length = 0;
         return;
       }
       chunks.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("end", () => {
+      if (tooLarge) return reject(new Error("payload too large"));
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
     req.on("error", reject);
+    // Notbremse: ein Client, der nach dem Limit einfach weitersendet, darf nicht unbegrenzt
+    // Bandbreite binden. Ab dem Zehnfachen wird die Verbindung doch gekappt.
+    req.on("data", () => {
+      if (tooLarge && size > limitBytes * 10) req.destroy();
+    });
   });
 }
 
@@ -69,7 +100,7 @@ async function dispatch(rpc: any, ctx: AuthContext, deps: Deps, requestId: strin
     return rpcResult(id, {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: { tools: {} },
-      serverInfo: { name: "mcp-showcase-server", version: "0.1.0" },
+      serverInfo: { name: "mcp-showcase-server", version: "0.2.0" },
     });
   }
 
@@ -89,15 +120,15 @@ async function dispatch(rpc: any, ctx: AuthContext, deps: Deps, requestId: strin
     }
     try {
       const result = await tool.handler(args, ctx, store);
-      await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, params: args, outcome: "ok", requestId, ip });
+      await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, params: Object.keys(args), outcome: "ok", requestId, ip });
       return rpcResult(id, { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result });
     } catch (err) {
       if (err instanceof AuthError) {
-        await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, params: args, outcome: "denied", code: err.code, requestId, ip });
+        await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, params: Object.keys(args), outcome: "denied", code: err.code, requestId, ip });
         return rpcError(id, -32003, err.code === "insufficient_scope" ? "Insufficient scope" : "Access denied");
       }
       if (err instanceof ToolInputError) {
-        await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, params: args, outcome: "error", code: "bad_input", requestId, ip });
+        await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, params: Object.keys(args), outcome: "error", code: "bad_input", requestId, ip });
         return rpcError(id, -32602, err.message);
       }
       // Generische Fehlermeldung nach außen — keine Interna/Stacktraces leaken.
@@ -141,6 +172,13 @@ export function buildServer(deps: Deps) {
       return json(res, 404, { error: "not_found" });
     }
 
+    // --- Origin-Validierung (vor der Auth: die Herkunft entscheidet, nicht der Token) ---
+    const origin = req.headers["origin"];
+    if (typeof origin === "string" && !originAllowed(origin, cfg.allowedOrigins)) {
+      await audit.write({ event: "origin", outcome: "denied", code: "origin_not_allowed", requestId, ip });
+      return json(res, 403, { error: "origin_not_allowed" });
+    }
+
     // --- Auth (OAuth 2.1 Bearer) ---
     let ctx: AuthContext;
     try {
@@ -162,9 +200,20 @@ export function buildServer(deps: Deps) {
     }
 
     // --- Body + Dispatch ---
+    let raw: string;
+    try {
+      raw = await readBody(req);
+    } catch (err) {
+      // Ein zu großer Body ist kein Parse-Fehler — das als -32700 zu melden schickte den Aufrufer
+      // auf die Suche nach einem Syntaxfehler in wohlgeformtem JSON.
+      const tooLarge = err instanceof Error && err.message === "payload too large";
+      if (tooLarge) {
+        return json(res, 413, rpcError(null, -32600, "Payload too large"), { connection: "close" });
+      }
+      return json(res, 400, rpcError(null, -32700, "Parse error"));
+    }
     let rpc: any;
     try {
-      const raw = await readBody(req);
       rpc = JSON.parse(raw || "{}");
     } catch {
       return json(res, 400, rpcError(null, -32700, "Parse error"));

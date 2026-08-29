@@ -28,10 +28,13 @@ async function makeStore(): Promise<Store> {
 
 const store = await makeStore();
 
+const audit = new AuditLog(cfg.auditLogPath);
+await audit.assertWritable();
+
 const deps = {
   cfg,
   store,
-  audit: new AuditLog(cfg.auditLogPath),
+  audit,
   limiter: new RateLimiter(cfg.rateLimitMax, cfg.rateLimitWindowMs),
   verify: createVerifier(cfg),
 };
@@ -39,5 +42,8 @@ const deps = {
 buildServer(deps).listen(cfg.port, () => {
   console.log(`mcp-showcase-server on ${cfg.resourceUrl}  (MCP endpoint: POST /mcp)`);
   console.log(`  issuer=${cfg.issuer}  audience=${cfg.audience}  tenantClaim=${cfg.tenantClaim}`);
+  console.log(
+    `  allowed origins: ${cfg.allowedOrigins.length > 0 ? cfg.allowedOrigins.join(", ") : "none (any request carrying an Origin header is rejected)"}`
+  );
   console.log(`  metadata: GET ${cfg.resourceUrl}/.well-known/oauth-protected-resource`);
 });
