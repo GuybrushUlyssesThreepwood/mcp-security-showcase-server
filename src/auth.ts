@@ -1,5 +1,5 @@
-// OAuth 2.1 Resource-Server-Logik: Bearer-JWT gegen JWKS des IdP prüfen.
-// Strikt: Signatur, issuer, audience und expiry werden validiert. Tenant kommt NUR aus dem Token.
+// OAuth 2.1 resource-server logic: verify the bearer JWT against the IdP's JWKS.
+// Strict: signature, issuer, audience and expiry are validated. The tenant comes ONLY from the token.
 
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
 import type { Config } from "./config.js";
@@ -32,7 +32,7 @@ export function createVerifier(cfg: Config) {
       const res = await jwtVerify(token, jwks, {
         issuer: cfg.issuer,
         audience: cfg.audience,
-        // clockTolerance klein halten; erzwingt Expiry-Prüfung.
+        // Keep clockTolerance small; enforces the expiry check.
         clockTolerance: 5,
       });
       payload = res.payload;

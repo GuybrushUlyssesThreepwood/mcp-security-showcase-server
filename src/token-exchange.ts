@@ -1,12 +1,13 @@
-// Token-Exchange für Downstream-Aufrufe (RFC 8693) — der richtige Weg statt Token-Passthrough.
+// Token exchange for downstream calls (RFC 8693) — the correct way instead of token pass-through.
 //
-// Problem: Ein MCP-Server, der das eingehende Nutzer-Token einfach an eine Downstream-API weiterreicht,
-// ist ein "confused deputy" (siehe Security-Checkliste #3/#4). Stattdessen tauscht der Server das
-// eingehende Token beim Authorization Server gegen ein *neues*, für die Downstream-API bestimmtes Token —
-// mit der Identität des Nutzers, aber korrekter audience und minimalem Scope.
+// The problem: an MCP server that simply forwards the incoming user token to a downstream API is a
+// "confused deputy" (see security checklist #3/#4). Instead the server exchanges the incoming token
+// at the authorization server for a *new* token intended for the downstream API — carrying the
+// user's identity, but with the correct audience and a minimal scope.
 //
-// Voraussetzung: ein echter IdP, der Token-Exchange (grant_type urn:ietf:params:oauth:grant-type:token-exchange)
-// unterstützt. Der Dev-Issuer-Stub tut das NICHT — dieser Helfer ist für den Produktionspfad.
+// Requires a real IdP that supports token exchange (grant_type
+// urn:ietf:params:oauth:grant-type:token-exchange). The dev issuer stub does NOT — this helper is
+// for the production path.
 
 export interface TokenExchangeConfig {
   tokenEndpoint: string;
@@ -21,8 +22,8 @@ export interface ExchangeResult {
 }
 
 /**
- * Tauscht das eingehende Access-Token gegen ein Downstream-Token für `audience`/`scope`.
- * Wirft bei Fehlschlag — der Aufrufer sollte den Tool-Call dann mit -32003 ablehnen (nicht durchreichen!).
+ * Exchanges the incoming access token for a downstream token for `audience`/`scope`.
+ * Throws on failure — the caller should then refuse the tool call with -32003 (never pass through!).
  */
 export async function exchangeToken(
   cfg: TokenExchangeConfig,

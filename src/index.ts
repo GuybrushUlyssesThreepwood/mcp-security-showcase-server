@@ -1,4 +1,4 @@
-// Einstiegspunkt: Konfiguration laden, Abhängigkeiten verdrahten, Server starten.
+// Entry point: load configuration, wire up dependencies, start the server.
 
 import { loadConfig } from "./config.js";
 import { createVerifier } from "./auth.js";

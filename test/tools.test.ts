@@ -1,5 +1,5 @@
 // Beweist auf Tool-Ebene: Scope-Erzwingung (least privilege) + Mandantentrennung + kein Existence-Leak.
-// AuthContext wird synthetisch gebaut (kein JWT nötig) — genau so, wie der Server ihn nach Token-Prüfung übergibt.
+// The AuthContext is built synthetically (no JWT needed) — exactly as the server passes it on after token verification.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

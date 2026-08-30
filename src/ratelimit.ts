@@ -1,4 +1,4 @@
-// Rate-Limiting pro Tenant (fixed-window). Schützt vor Agenten-Schleifen/Kostenexplosion.
+// Per-tenant rate limiting (fixed window). Protects against agent loops and cost explosions.
 
 export interface RateLimitResult {
   allowed: boolean;

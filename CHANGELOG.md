@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+### Changed
+- **Documentation and code comments are now English.** README, `SECURITY.md` and all source and test
+  comments were German. `docs/api-auswahl.md` is now `docs/swapping-the-domain.md`; the README link
+  follows it. No behaviour change — no runtime string was affected.
+
 ## [0.2.1] - 2026-08-29
 ### Fixed
 - **The tampered-signature test was only testing anything three runs out of four.** It flipped the

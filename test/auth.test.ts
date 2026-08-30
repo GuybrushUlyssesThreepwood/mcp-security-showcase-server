@@ -1,4 +1,4 @@
-// Beweist die Kern-Auth: RS256-JWT gegen JWKS geprüft, mit Signatur/Issuer/Audience/Expiry.
+// Proves the core auth: RS256 JWT verified against JWKS, with signature/issuer/audience/expiry.
 // Tenant kommt AUSSCHLIESSLICH aus dem verifizierten Token. Ein lokaler JWKS-Server ersetzt den IdP.
 
 import { test, before, after } from "node:test";
@@ -127,21 +127,21 @@ test("a tampered signature is rejected", async () => {
   const verify = createVerifier(cfg());
   const token = await mint({ tenant: "acme" });
 
-  // Signatur dekodieren, ein Bit im ersten Byte kippen, neu kodieren.
+  // Decode the signature, flip a bit in the first byte, re-encode.
   //
-  // Nicht das letzte Zeichen kippen: eine RS256-Signatur ist 256 Byte, die letzte Base64-Gruppe
-  // kodiert ein einzelnes Byte, und die unteren 4 Bit des letzten Zeichens sind Padding, das beim
-  // Dekodieren verworfen wird. 'A'→'B' ändert nur dieses Padding — die dekodierte Signatur bleibt
-  // identisch, jose akzeptiert das Token, und der Test scheiterte mit "Missing expected rejection".
-  // Das traf jedes Mal zu, wenn das letzte Zeichen in A–P lag, also in rund einem Viertel der Läufe
-  // (der Schlüssel wird je Lauf neu erzeugt). In den übrigen Läufen bestand der Test — aber nur,
-  // weil die Manipulation zufällig durchschlug.
+  // Do not flip the last character: an RS256 signature is 256 bytes, the final base64 group encodes
+  // a single byte, and the low four bits of the last character are padding that is discarded on
+  // decode. 'A'->'B' changes only that padding — the decoded signature stays identical, jose
+  // accepts the token, and the test failed with "Missing expected rejection". That happened
+  // whenever the last character fell in A-P, i.e. in roughly a quarter of the runs (the key is
+  // generated per run). In the other runs the test passed, but only because the tampering happened
+  // to survive the round trip.
   const [header, payload, signature] = token.split(".");
   const raw = Buffer.from(signature, "base64url");
   raw[0] ^= 0xff;
   const tampered = `${header}.${payload}.${raw.toString("base64url")}`;
 
-  assert.notEqual(tampered, token, "die Manipulation muss das Token tatsächlich verändern");
+  assert.notEqual(tampered, token, "the tampering must actually change the token");
   await assert.rejects(
     () => verify(`Bearer ${tampered}`),
     (e: unknown) => e instanceof AuthError && e.code === "invalid_token"

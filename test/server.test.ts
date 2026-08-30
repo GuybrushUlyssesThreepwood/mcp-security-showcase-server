@@ -1,5 +1,5 @@
-// Beweist die HTTP-Schicht: Origin-Validierung gegen DNS-Rebinding und die Fehlerkodierung.
-// Der Server wird echt gestartet — genau diese Schicht lässt sich nicht sinnvoll unit-testen.
+// Proves the HTTP layer: origin validation against DNS rebinding, and the error encoding.
+// The server is really started — this layer cannot be unit-tested meaningfully.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -34,7 +34,7 @@ function testConfig(allowedOrigins: string[]): Config {
   };
 }
 
-/** Verify-Stub: die Auth selbst ist in auth.test.ts abgedeckt, hier zählt die Reihenfolge. */
+/** Verify stub: auth itself is covered in auth.test.ts; what matters here is the ordering. */
 const okVerify = async (h: string | undefined): Promise<AuthContext> => {
   if (!h) throw Object.assign(new Error("no token"), { code: "missing_token", name: "AuthError" });
   return { subject: "user@acme", tenant: "acme", scopes: ["notes:read", "notes:write"], raw: {} };
@@ -80,7 +80,7 @@ test("a foreign Origin is rejected with 403 — before authentication", async ()
 });
 
 test("a valid token does not buy a foreign Origin past the check", async () => {
-  // Die Origin-Prüfung schützt vor DNS-Rebinding — geprüft wird die Herkunft, nicht die Identität.
+  // The origin check guards against DNS rebinding — it checks provenance, not identity.
   await withServer(["https://app.example.com"], async (base) => {
     const res = await fetch(`${base}/mcp`, {
       method: "POST",

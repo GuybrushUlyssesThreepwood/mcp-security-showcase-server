@@ -1,14 +1,14 @@
-// Strukturiertes, append-only Audit-Log (JSON Lines).
-// Protokolliert: wer (subject) · welcher Tenant · welches Tool · welche Parameter-NAMEN · Ergebnis · Zeit.
+// Structured, append-only audit log (JSON Lines).
+// Records: who (subject) - which tenant - which tool - which parameter NAMES - outcome - time.
 //
-// Bewusst ohne Parameterwerte: Notizinhalte, Titel und alles andere, was ein Tool entgegennimmt,
-// gehören nicht ins Audit-Log. Ein Audit beantwortet „wer hat wann was getan", nicht „was stand
-// drin" — und ein Log, das Nutzerinhalte mitschreibt, wird selbst zum Datenschutzproblem und
-// vererbt seine Aufbewahrungsfrist an fremde Inhalte.
+// Deliberately without parameter values: note contents, titles and everything else a tool accepts
+// do not belong in the audit log. An audit answers "who did what, when", not "what did it say" —
+// and a log that copies user content becomes a data-protection problem of its own and passes its
+// retention period on to other people's content.
 //
-// `redact` bleibt als zweite Verteidigungslinie: sie maskiert Werte anhand des Schlüsselnamens und
-// kürzt lange Strings, falls ein Aufrufer doch einmal ein Objekt statt einer Namensliste übergibt.
-// Sie erkennt KEINE Secrets am Wert — ein Token unter dem Schlüssel `note` bliebe stehen.
+// `redact` stays as a second line of defence: it masks values by key name and truncates long
+// strings, in case a caller does pass an object instead of a list of names. It does NOT detect
+// secrets by value — a token stored under the key `note` would survive.
 
 import { appendFile } from "node:fs/promises";
 
@@ -45,11 +45,11 @@ export class AuditLog {
   constructor(private path: string) {}
 
   /**
-   * Einmal beim Start prüfen, ob überhaupt geschrieben werden kann.
+   * Check once at start-up whether writing is possible at all.
    *
-   * `write` fängt Fehler bewusst ab, damit ein volles Dateisystem keine Requests killt. Der Preis:
-   * ein dauerhaft nicht schreibbarer Pfad (falsche Rechte im Container) fällt sonst nie auf — der
-   * Server läuft, nur ohne Audit-Trail. Genau das ist der Zustand, den es nicht geben darf.
+   * `write` swallows errors on purpose, so a full disk does not kill requests. The price: a
+   * permanently unwritable path (wrong permissions in the container) would otherwise never surface
+   * — the server runs, just without an audit trail. That is exactly the state that must not exist.
    */
   async assertWritable(): Promise<void> {
     try {

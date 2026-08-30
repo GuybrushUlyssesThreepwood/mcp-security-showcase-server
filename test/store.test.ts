@@ -1,5 +1,5 @@
-// Beweist die zentrale Sicherheitszusage: strikte Mandantentrennung im Store.
-// Kein Zugriffspfad darf Daten eines fremden Tenants zurückgeben.
+// Proves the central security promise: strict tenant isolation in the store.
+// No access path may return another tenant's data.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

@@ -1,10 +1,11 @@
-// Postgres-Store mit Row-Level-Security (Roadmap-Umsetzung).
-// Zwei Verteidigungslinien:
-//   1) Jede Query filtert explizit nach tenant ($1).
-//   2) Zusätzlich wird pro Transaktion `app.current_tenant` gesetzt; die RLS-Policy in
-//      migrations/001_notes_rls.sql erzwingt tenant-Isolation auf DB-Ebene (auch bei App-Bug).
+// Postgres store with row-level security (roadmap item, implemented).
+// Two lines of defence:
+//   1) Every query filters explicitly by tenant ($1).
+//   2) In addition, `app.current_tenant` is set per transaction; the RLS policy in
+//      migrations/001_notes_rls.sql enforces tenant isolation at the database level (even with an
+//      application bug).
 //
-// `pg` ist eine optionale Abhängigkeit — nur nötig, wenn STORE=pg. Import daher dynamisch.
+// `pg` is an optional dependency — only needed when STORE=pg, so the import is dynamic.
 
 import { randomUUID } from "node:crypto";
 import type { Note, Store } from "./store.js";
@@ -24,7 +25,7 @@ export class PgTenantStore implements Store {
   private constructor(private pool: PgLike) {}
 
   static async create(connectionString: string): Promise<PgTenantStore> {
-    // Dynamischer Import: base-Server läuft ohne installiertes 'pg'.
+    // Dynamic import: the base server runs without 'pg' installed.
     const pg = await import("pg").catch(() => {
       throw new Error("STORE=pg requires the 'pg' package. Run: npm install pg");
     });
@@ -32,12 +33,12 @@ export class PgTenantStore implements Store {
     return new PgTenantStore(new Pool({ connectionString }));
   }
 
-  /** Führt fn in einer Transaktion aus, in der app.current_tenant gesetzt ist (für RLS). */
+  /** Runs fn inside a transaction in which app.current_tenant is set (for RLS). */
   private async withTenant<T>(tenant: string, fn: (c: PgClient) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      // set_config(..., true) = nur für diese Transaktion (LOCAL).
+      // set_config(..., true) = for this transaction only (LOCAL).
       await client.query("SELECT set_config('app.current_tenant', $1, true)", [tenant]);
       const out = await fn(client);
       await client.query("COMMIT");

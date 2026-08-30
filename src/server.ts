@@ -1,6 +1,6 @@
-// HTTP-Layer: MCP-über-Streamable-HTTP als OAuth-2.1-Resource-Server.
-// Bewusst explizit (kein Framework), damit die Security-Schichten sichtbar sind — der Verkaufspunkt.
-// Reihenfolge pro Request: Sicherheits-Header · Origin · Auth · Rate-Limit · Dispatch · Audit.
+// HTTP layer: MCP over Streamable HTTP as an OAuth 2.1 resource server.
+// Deliberately explicit (no framework) so the security layers stay visible — that is the point.
+// Order per request: security headers - origin - auth - rate limit - dispatch - audit.
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -25,9 +25,9 @@ function json(res: ServerResponse, status: number, body: unknown, headers: Recor
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json",
-    // Bewusst KEINE CORS-Header: der Zugriff ist rein tokenbasiert und für Browser-Cross-Origin
-    // nicht vorgesehen. Ohne Access-Control-Allow-Origin blockiert der Browser die Antwort —
-    // das ist die restriktivste mögliche Einstellung, kein vergessener Header.
+    // Deliberately NO CORS headers: access is purely token-based and not intended for browser
+    // cross-origin use. Without Access-Control-Allow-Origin the browser blocks the response —
+    // that is the most restrictive setting available, not a forgotten header.
     "cache-control": "no-store",
     ...headers,
   });
@@ -35,15 +35,15 @@ function json(res: ServerResponse, status: number, body: unknown, headers: Recor
 }
 
 /**
- * Origin-Prüfung gegen DNS-Rebinding (MCP Streamable HTTP: Server MÜSSEN den Origin validieren).
+ * Origin check against DNS rebinding (MCP Streamable HTTP: servers MUST validate the origin).
  *
- * Ohne sie kann eine beliebige Webseite den lokal oder im internen Netz erreichbaren Server per
- * DNS-Rebinding ansprechen. Der Bearer-Token schützt davor nicht vollständig: geprüft wird hier die
- * Herkunft der Anfrage, nicht die Identität des Aufrufers.
+ * Without it, any web page can address a server reachable locally or on an internal network via DNS
+ * rebinding. The bearer token does not fully protect against that: what is checked here is where the
+ * request came from, not who sent it.
  *
- * Nicht-Browser-Clients (CLI, Agent, Server-zu-Server) senden gar keinen Origin — die werden
- * durchgelassen, denn ein fehlender Origin ist kein Cross-Site-Kontext. Gesetzte Origins müssen in
- * ALLOWED_ORIGINS stehen; ist die Liste leer, wird jeder gesetzte Origin abgelehnt.
+ * Non-browser clients (CLI, agent, server-to-server) send no Origin at all — those pass, because a
+ * missing origin is not a cross-site context. Origins that are set must appear in ALLOWED_ORIGINS;
+ * when that list is empty, every origin that is set is refused.
  */
 function originAllowed(origin: string | undefined, allowed: string[]): boolean {
   if (origin === undefined) return true;
@@ -67,11 +67,11 @@ async function readBody(req: IncomingMessage, limitBytes = 1_000_000): Promise<s
     let tooLarge = false;
     req.on("data", (c: Buffer) => {
       size += c.length;
-      if (tooLarge) return; // weiterlesen, aber nicht mehr puffern
+      if (tooLarge) return; // keep reading, but stop buffering
       if (size > limitBytes) {
-        // Begrenzt wird der SPEICHER, nicht die Verbindung. Ein req.destroy() hier reißt den Socket
-        // ab, während der Client noch sendet — er sieht dann ECONNRESET statt der 413-Antwort und
-        // erfährt nie, warum. Also: aufhören zu puffern, den Rest verwerfen, sauber antworten.
+        // What is bounded is MEMORY, not the connection. A req.destroy() here tears down the
+        // socket while the client is still sending — it then sees ECONNRESET instead of the 413 and
+        // never learns why. So: stop buffering, discard the rest, answer cleanly.
         tooLarge = true;
         chunks.length = 0;
         return;
@@ -131,7 +131,7 @@ async function dispatch(rpc: any, ctx: AuthContext, deps: Deps, requestId: strin
         await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, params: Object.keys(args), outcome: "error", code: "bad_input", requestId, ip });
         return rpcError(id, -32602, err.message);
       }
-      // Generische Fehlermeldung nach außen — keine Interna/Stacktraces leaken.
+      // Generic error message outward — leak no internals or stack traces.
       console.error(`[${requestId}] tool error:`, err);
       await audit.write({ event: "tool_call", subject: ctx.subject, tenant: ctx.tenant, tool: name, outcome: "error", code: "internal", requestId, ip });
       return rpcError(id, -32603, "Internal error");
@@ -154,12 +154,12 @@ export function buildServer(deps: Deps) {
     const ip = req.socket.remoteAddress ?? undefined;
     const url = new URL(req.url ?? "/", cfg.resourceUrl);
 
-    // Baseline-Sicherheits-Header auf jeder Antwort (überleben writeHead via setHeader).
+    // Baseline security headers on every response (they survive writeHead via setHeader).
     res.setHeader("x-content-type-options", "nosniff");
     res.setHeader("referrer-policy", "no-referrer");
     if (httpsPublic) res.setHeader("strict-transport-security", "max-age=15552000; includeSubDomains");
 
-    // --- Discovery-Endpunkte (unauth, öffentlich) ---
+    // --- Discovery endpoints (unauthenticated, public) ---
     if (req.method === "GET" && url.pathname === "/.well-known/oauth-protected-resource") {
       return json(res, 200, protectedResourceMetadata(cfg));
     }
@@ -167,12 +167,12 @@ export function buildServer(deps: Deps) {
       return json(res, 200, { status: "ok" });
     }
 
-    // --- Nur POST auf den MCP-Endpunkt ---
+    // --- POST to the MCP endpoint only ---
     if (req.method !== "POST" || url.pathname !== "/mcp") {
       return json(res, 404, { error: "not_found" });
     }
 
-    // --- Origin-Validierung (vor der Auth: die Herkunft entscheidet, nicht der Token) ---
+    // --- Origin validation (before auth: origin decides, not the token) ---
     const origin = req.headers["origin"];
     if (typeof origin === "string" && !originAllowed(origin, cfg.allowedOrigins)) {
       await audit.write({ event: "origin", outcome: "denied", code: "origin_not_allowed", requestId, ip });
@@ -186,13 +186,13 @@ export function buildServer(deps: Deps) {
     } catch (err) {
       const code = err instanceof AuthError ? err.code : "invalid_token";
       await audit.write({ event: "auth", outcome: "denied", code, requestId, ip });
-      // WWW-Authenticate mit Verweis auf Resource-Metadaten (RFC 9728 Stil).
+      // WWW-Authenticate pointing at the resource metadata (RFC 9728 style).
       return json(res, 401, { error: code }, {
         "www-authenticate": `Bearer realm="mcp", error="${code}", resource_metadata="${cfg.resourceUrl}/.well-known/oauth-protected-resource"`,
       });
     }
 
-    // --- Rate-Limit pro Tenant ---
+    // --- Per-tenant rate limit ---
     const rl = limiter.check(ctx.tenant);
     if (!rl.allowed) {
       await audit.write({ event: "rate_limit", subject: ctx.subject, tenant: ctx.tenant, outcome: "denied", code: "rate_limited", requestId, ip });
@@ -204,8 +204,8 @@ export function buildServer(deps: Deps) {
     try {
       raw = await readBody(req);
     } catch (err) {
-      // Ein zu großer Body ist kein Parse-Fehler — das als -32700 zu melden schickte den Aufrufer
-      // auf die Suche nach einem Syntaxfehler in wohlgeformtem JSON.
+      // An oversized body is not a parse error — reporting it as -32700 sent callers looking for
+      // a syntax error in well-formed JSON.
       const tooLarge = err instanceof Error && err.message === "payload too large";
       if (tooLarge) {
         return json(res, 413, rpcError(null, -32600, "Payload too large"), { connection: "close" });

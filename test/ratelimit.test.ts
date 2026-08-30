@@ -1,4 +1,4 @@
-// Beweist: fixed-window Rate-Limiting pro Tenant (schützt vor Agenten-Schleifen/Kostenexplosion).
+// Proves: fixed-window rate limiting per tenant (guards against agent loops and cost explosions).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

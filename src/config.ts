@@ -1,12 +1,12 @@
-// Zentrale Konfiguration aus Umgebungsvariablen. Fail-fast bei fehlenden Pflichtwerten.
+// Central configuration from environment variables. Fail fast on missing required values.
 
 export interface Config {
   port: number;
-  /** Öffentliche Basis-URL dieses Resource-Servers (für Metadaten & audience). */
+  /** Public base URL of this resource server (used for metadata & audience). */
   resourceUrl: string;
   /** OAuth Authorization Server Issuer (IdP). */
   issuer: string;
-  /** JWKS-URI des Authorization Servers. */
+  /** JWKS URI of the authorization server. */
   jwksUri: string;
   /** Erwartete audience im Access Token (i. d. R. = resourceUrl). */
   audience: string;
@@ -27,11 +27,12 @@ export interface Config {
 }
 
 /**
- * Pflichtwert aus der Umgebung.
+ * Required value from the environment.
  *
- * Die Fallbacks sind reine Entwicklungswerte (localhost-Issuer, localhost-Audience). In Produktion
- * sind sie gefährlich: fehlt OAUTH_ISSUER, liefe der Server still gegen einen IdP, den es dort nicht
- * gibt, statt beim Start zu scheitern. Deshalb greifen Fallbacks nur außerhalb von NODE_ENV=production.
+ * The fallbacks are development-only values (localhost issuer, localhost audience). In production
+ * they are dangerous: with OAUTH_ISSUER missing, the server would silently run against an IdP that
+ * does not exist there instead of failing at start-up. Fallbacks therefore only apply outside
+ * NODE_ENV=production.
  */
 function req(name: string, devFallback?: string): string {
   const v = process.env[name];

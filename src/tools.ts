@@ -1,5 +1,5 @@
-// Tool-Definitionen. Jeder Handler ist tenant-gescoped und scope-geprüft.
-// Beschreibungen sind bewusst neutral/sauber (kein Injection-Material) — der Scanner läuft grün durch.
+// Tool definitions. Every handler is tenant-scoped and scope-checked.
+// Descriptions are deliberately neutral and clean (no injection material) — the scanner passes.
 
 import type { AuthContext } from "./auth.js";
 import { requireScope } from "./auth.js";

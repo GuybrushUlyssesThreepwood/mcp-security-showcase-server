@@ -1,12 +1,12 @@
-// DEV-ONLY OAuth-Authorization-Server-Stub für lokales Testen des Showcase-Servers.
-// NICHT für Produktion. Persistiert ein RS256-Schlüsselpaar in .dev-keys.json, damit der
-// laufende Issuer und der `mint`-Befehl denselben Schlüssel nutzen. Serviert JWKS + AS-Metadaten
-// (inkl. PKCE S256) und kann Access-Tokens minten.
+// DEV-ONLY OAuth authorization-server stub for testing the showcase server locally.
+// NOT for production. Persists an RS256 key pair in .dev-keys.json so the running issuer and the
+// `mint` command use the same key. Serves JWKS + AS metadata (including PKCE S256) and can mint
+// access tokens.
 //
-//   node scripts/dev-issuer.mjs            -> startet den Issuer (Port 8969)
-//   node scripts/dev-issuer.mjs mint acme notes:read,notes:write   -> druckt ein Token
+//   node scripts/dev-issuer.mjs            -> starts the issuer (port 8969)
+//   node scripts/dev-issuer.mjs mint acme notes:read,notes:write   -> prints a token
 //
-// Für den echten Betrieb ersetzt ein richtiger IdP (Auth0, WorkOS, Keycloak, …) diesen Stub.
+// In real operation a proper IdP (Auth0, WorkOS, Keycloak, ...) replaces this stub.
 
 import { createServer } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
@@ -61,7 +61,7 @@ const asMetadata = {
   jwks_uri: `${ISSUER}/.well-known/jwks.json`,
   response_types_supported: ["code"],
   grant_types_supported: ["authorization_code", "client_credentials"],
-  // OAuth 2.1: PKCE S256 wird angeboten — genau das prüft mcp-sec-scan.
+  // OAuth 2.1: PKCE S256 is advertised — exactly what mcp-sec-scan checks.
   code_challenge_methods_supported: ["S256"],
   token_endpoint_auth_methods_supported: ["none", "client_secret_basic"],
   scopes_supported: ["notes:read", "notes:write"],

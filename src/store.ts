@@ -1,7 +1,7 @@
-// Mandantengetrennter Datenspeicher (In-Memory-Referenz).
-// Kernprinzip: JEDE Operation ist auf tenant gescoped. Es gibt KEINE API, die tenant-übergreifend liest.
-// Ein echtes Backend (Postgres mit Row-Level-Security etc.) ersetzt diese Klasse 1:1 — die Signaturen
-// erzwingen tenant als erstes Argument.
+// Tenant-separated data store (in-memory reference).
+// Core principle: EVERY operation is scoped to a tenant. There is NO API that reads across tenants.
+// A real backend (Postgres with row-level security, etc.) replaces this class one to one — the
+// signatures force tenant to be the first argument.
 
 import { randomUUID } from "node:crypto";
 
@@ -14,8 +14,8 @@ export interface Note {
   createdBy: string;
 }
 
-/** Store-Vertrag: tenant ist IMMER erstes Argument → kein tenant-übergreifender Zugriff möglich.
- *  In-Memory (unten) und Postgres-RLS (store-pg.ts) implementieren beide dieses Interface. */
+/** Store contract: tenant is ALWAYS the first argument -> no cross-tenant access is expressible.
+ *  The in-memory store (below) and Postgres RLS (store-pg.ts) both implement this interface. */
 export interface Store {
   listNotes(tenant: string): Promise<Note[]> | Note[];
   getNote(tenant: string, id: string): Promise<Note | undefined> | Note | undefined;
@@ -40,7 +40,7 @@ export class TenantStore implements Store {
   }
 
   getNote(tenant: string, id: string): Note | undefined {
-    // Lookup ausschließlich in der Tenant-Partition — ein fremder id trifft nichts.
+    // Look up only inside the tenant partition — a foreign id matches nothing.
     return this.tenantMap(tenant).get(id);
   }
 
@@ -57,7 +57,7 @@ export class TenantStore implements Store {
     return note;
   }
 
-  /** Nur für Tests/Seeds. */
+  /** For tests and seeds only. */
   seed(notes: Array<Omit<Note, "id" | "createdAt">>): void {
     for (const n of notes) {
       const note: Note = { ...n, id: randomUUID(), createdAt: new Date().toISOString() };
